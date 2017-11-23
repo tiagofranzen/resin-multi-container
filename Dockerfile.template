@@ -5,7 +5,7 @@ MAINTAINER Anton Belodedenko <anton@belodedenko.me>
 RUN apk --update add \
   bash python py-setuptools py-pip iptables\
   ca-certificates e2fsprogs docker bind-tools\
-  curl vim device-mapper
+  curl vim device-mapper gawk
 
 RUN apk --update add\
   --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing\
