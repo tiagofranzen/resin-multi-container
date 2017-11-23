@@ -1,0 +1,36 @@
+FROM resin/%%RESIN_MACHINE_NAME%%-alpine:edge
+
+MAINTAINER Anton Belodedenko <anton@belodedenko.me>
+
+RUN apk --update add \
+  bash python py-setuptools py-pip iptables\
+  ca-certificates e2fsprogs docker bind-tools\
+  curl vim device-mapper
+
+RUN apk --update add\
+  --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing\
+  aufs-util
+
+RUN rm -rf /var/cache/apk/*
+
+RUN pip install docker-compose
+
+ADD wrapdocker /usr/local/bin/wrapdocker
+
+ADD daemon.json /etc/docker/daemon.json
+
+ADD functions /root/functions
+
+ADD start /start
+
+RUN chmod +x /usr/local/bin/wrapdocker
+
+RUN adduser root docker
+
+COPY ./apps /apps
+
+VOLUME /var/lib/docker
+
+WORKDIR /apps
+
+CMD /start

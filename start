@@ -1,0 +1,64 @@
+#!/bin/bash -xe
+[ -f /root/functions ] && source /root/functions
+
+keep_alive() {
+    if [[ $(with_backoff docker-compose ps 2>&1 | tail -n+3 | grep -v Up | wc -l) -ne 0 ]]; then
+        echo "container exited, restarting docker stack..."
+        with_backoff docker-compose down
+        with_backoff docker-compose up &
+    fi
+}
+
+mount -o bind /data /var/lib/docker
+
+if [[ "$(uname -m)" == 'x86_64' ]] || [[ "$(uname -m)" == 'amd64' ]]; then
+    export RESIN_ARCH=amd64
+fi
+
+if [[ "$(uname -m)" =~ armv[7-8]l ]]; then
+    export RESIN_ARCH=armhf
+fi
+
+VERSION_HASH=$(echo "$RESIN_HOST_OS_VERSION" | md5sum | awk '{print $1}')
+if ! [ -f "/data/rules-${VERSION_HASH}.v4" ]; then
+    iptables-save > /data/rules-${VERSION_HASH}.v4
+fi
+
+if [ -f "/data/rules-${VERSION_HASH}.v4" ]; then
+    for table in filter nat mangle raw; do
+        iptables -t ${table} -F
+    done
+    iptables-restore < /data/rules-${VERSION_HASH}.v4
+fi
+
+if ! docker info &>/dev/null; then
+    with_backoff wrapdocker echo
+fi
+
+for proto in udp tcp; do
+    iptables -t nat -A DOCKER -d $(get_ipaddr docker0)/32\
+      -p ${proto} -m ${proto} --dport 53\
+      -j DNAT --to-destination 127.0.0.2:53
+done
+
+iptables -I FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN\
+  -j TCPMSS --clamp-mss-to-pmtu
+
+containers=$(find * -maxdepth 0 -type d)
+for i in ${containers}; do
+    if [ -f "${i}/Dockerfile" ]; then
+        sed -i'' "s/%%RESIN_ARCH%%/${RESIN_ARCH}/g" ${i}/Dockerfile
+        with_backoff docker-compose build ${i}
+    fi
+done
+
+with_backoff docker rm -v $(docker ps -a -q -f status=exited 2>/dev/null) &>/dev/null || true
+with_backoff docker rmi $(docker images -f "dangling=true" -q 2>/dev/null) &>/dev/null || true
+with_backoff docker-compose down || true
+with_backoff docker-compose up &
+
+set +x
+while true; do
+    sleep 5m
+    keep_alive
+done

@@ -1,0 +1,48 @@
+# obtains ipaddr from given interface (e.g. docker0)
+function get_ipaddr() {
+    local ipaddr=$(ip addr show dev ${1} | \
+      grep inet | \
+      grep -v inet6 | \
+      awk '{print $2}' | \
+      grep -Po '[0-9]{1,3}+\.[0-9]{1,3}+\.[0-9]{1,3}+\.[0-9]{1,3}+(?=\/)' | head -n 1)
+    echo $(echo ${ipaddr} | awk '{print $1}')
+}
+
+# Retries a command a with backoff.
+#
+# The retry count is given by ATTEMPTS (default 5), the
+# initial backoff timeout is given by TIMEOUT in seconds
+# (default 1.)
+#
+# Successive backoffs double the timeout.
+#
+# Beware of set -e killing your whole script!
+function with_backoff {
+  local max_attempts=${ATTEMPTS-3}
+  local timeout=${TIMEOUT-2}
+  local attempt=0
+  local exitCode=0
+
+  while [[ $attempt < $max_attempts ]]
+  do
+    "$@"
+    exitCode=$?
+
+    if [[ $exitCode == 0 ]]
+    then
+      break
+    fi
+
+    echo "Failure! Retrying in $timeout.." 1>&2
+    sleep $timeout
+    attempt=$(( attempt + 1 ))
+    timeout=$(( timeout * 2 ))
+  done
+
+  if [[ $exitCode != 0 ]]
+  then
+    echo "You've failed me for the last time! ($@)" 1>&2
+  fi
+
+  return $exitCode
+}
