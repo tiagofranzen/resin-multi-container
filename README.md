@@ -1,7 +1,5 @@
 # resin-multi-container
 
-**THIS IS WORK IN PROGRESS**
-
 Multiple containers example based on [this](https://github.com/justin8/resin-multi-container) project. 
 
 Updated to work with ResinOS v2+ running dnsmasq and Docker bridge on `10.114.101.1/24`.
